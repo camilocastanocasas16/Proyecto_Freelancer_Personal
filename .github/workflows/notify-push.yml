@@ -1,0 +1,88 @@
+
+name: Discord - Push Notification
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  notify-discord:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send notification to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          PAYLOAD=$(jq '
+            {
+              username: "DevOps Bot",
+              allowed_mentions: {
+                parse: []
+              },
+              embeds: [
+                {
+                  title: "🚀 Nuevos cambios publicados",
+                  description: "Se han publicado nuevos cambios en el repositorio.",
+                  color: 3447003,
+                  url: .compare,
+                  fields: [
+                    {
+                      name: "📦 Repositorio",
+                      value: .repository.name,
+                      inline: true
+                    },
+                    {
+                      name: "🌿 Rama",
+                      value: (.ref | sub("^refs/heads/"; "")),
+                      inline: true
+                    },
+                    {
+                      name: "👨‍💻 Desarrollador",
+                      value: .sender.login,
+                      inline: true
+                    },
+                    {
+                      name: "📊 Total de commits",
+                      value: (.commits | length | tostring),
+                      inline: true
+                    },
+                    {
+                      name: "📝 Cambios realizados",
+                      value: (
+                        [.commits[:10][] |
+                          "[`" + .id[0:7] + "`](" + .url + ") — " +
+                          (.message | split("\n")[0])
+                        ] | join("\n") |
+                        if length == 0 then
+                          "Sin commits nuevos"
+                        else
+                          .[0:1000]
+                        end
+                      ),
+                      inline: false
+                    },
+                    {
+                      name: "🔗 Enlace",
+                      value: "[Ver cambios en GitHub](" + .compare + ")",
+                      inline: false
+                    }
+                  ],
+                  thumbnail: {
+                    url: .sender.avatar_url
+                  },
+                  footer: {
+                    text: "DevOps • Control de versiones"
+                  },
+                  timestamp: (now | todateiso8601)
+                }
+              ]
+            }
+          ' "$GITHUB_EVENT_PATH")
+
+          curl --fail-with-body \
+            -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
