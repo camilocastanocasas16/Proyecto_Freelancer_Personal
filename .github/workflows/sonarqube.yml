@@ -31,3 +31,107 @@ jobs:
         with:
           args: >
             -Dsonar.qualitygate.wait=true
+
+
+  notify-discord:
+    name: Notify Discord
+    needs: sonar
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send SonarQube result
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_SONAR_WEBHOOK_URL }}
+          RESULT: ${{ needs.sonar.result }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SONAR_URL: ${{ vars.SONAR_DASHBOARD_URL }}
+
+        run: |
+          case "$RESULT" in
+            success)
+              TITLE="✅ Quality Gate aprobado"
+              DESCRIPTION="El código cumple con los estándares de calidad."
+              STATUS="Aprobado"
+              COLOR=3066993
+              ;;
+            failure)
+              TITLE="❌ Verificación de calidad fallida"
+              DESCRIPTION="Revisa el análisis o los errores del pipeline."
+              STATUS="Fallido"
+              COLOR=15158332
+              ;;
+            cancelled)
+              TITLE="⚪ Análisis cancelado"
+              DESCRIPTION="La ejecución fue cancelada."
+              STATUS="Cancelado"
+              COLOR=9807270
+              ;;
+            *)
+              TITLE="⚠️ Análisis no ejecutado"
+              DESCRIPTION="El análisis fue omitido."
+              STATUS="Omitido"
+              COLOR=15105570
+              ;;
+          esac
+
+          PAYLOAD=$(jq -n \
+            --arg title "$TITLE" \
+            --arg description "$DESCRIPTION" \
+            --arg status "$STATUS" \
+            --arg repo "$REPO" \
+            --arg branch "$BRANCH" \
+            --arg actor "$ACTOR" \
+            --arg run "$RUN_URL" \
+            --arg sonar "$SONAR_URL" \
+            --argjson color "$COLOR" \
+            '{
+              username: "SonarQube Bot",
+              allowed_mentions: {
+                parse: []
+              },
+              embeds: [{
+                title: $title,
+                description: $description,
+                color: $color,
+                fields: [
+                  {
+                    name: "📦 Repositorio",
+                    value: $repo
+                  },
+                  {
+                    name: "🌿 Rama",
+                    value: $branch,
+                    inline: true
+                  },
+                  {
+                    name: "📊 Resultado",
+                    value: $status,
+                    inline: true
+                  },
+                  {
+                    name: "👨‍💻 Desarrollador",
+                    value: $actor
+                  },
+                  {
+                    name: "🔗 Enlaces",
+                    value: (
+                      "[Consultar SonarQube](" + $sonar + ")\n" +
+                      "[Consultar GitHub Actions](" + $run + ")"
+                    )
+                  }
+                ],
+                footer: {
+                  text: "DevOps • Code Quality"
+                },
+                timestamp: (now | todateiso8601)
+              }]
+            }')
+
+          curl --fail-with-body \
+            -X POST "$WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
