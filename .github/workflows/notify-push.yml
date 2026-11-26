@@ -32,22 +32,22 @@ jobs:
                     {
                       name: "📦 Repositorio",
                       value: .repository.name,
-                      inline: true
+                      inline: false
                     },
                     {
                       name: "🌿 Rama",
                       value: (.ref | sub("^refs/heads/"; "")),
-                      inline: true
+                      inline: false
                     },
                     {
                       name: "👨‍💻 Desarrollador",
                       value: .sender.login,
-                      inline: true
+                      inline: false
                     },
                     {
                       name: "📊 Total de commits",
                       value: (.commits | length | tostring),
-                      inline: true
+                      inline: false
                     },
                     {
                       name: "📝 Cambios realizados",
@@ -74,7 +74,7 @@ jobs:
                     url: .sender.avatar_url
                   },
                   footer: {
-                    text: "DevOps • Control de versiones"
+                    text: "DevOps Bot • Control de versiones"
                   },
                   timestamp: (now | todateiso8601)
                 }
